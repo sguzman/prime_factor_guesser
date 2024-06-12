@@ -1,4 +1,4 @@
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use log::{info, warn};
 use rayon::prelude::*;
 use serde::Serialize;
@@ -56,9 +56,22 @@ fn main() {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).expect("Failed to read the file");
 
+    // Progress bar for file conversion
+    let bar = ProgressBar::new(buffer.len() as u64);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} {bar:40.cyan/blue} {pos}/{len}")
+            .expect("Failed to set progress bar style"),
+    );
+    bar.set_message("Converting file to number");
+    
     let number = BigUint::from_bytes_be(&buffer);
-    info!("Number to factorize: {}", number);
+    bar.finish_with_message("File converted to number");
 
+    info!("Number to factorize: {}", number);
+    info!("Number of digits: {}", number.to_string().len());
+
+    // Generate prime candidates up to sqrt(number)
     let sqrt_n = number.sqrt();
     let sqrt_u64 = sqrt_n.to_u64_digits()[0];
     let primes = generate_primes_up_to(sqrt_u64);
@@ -72,12 +85,14 @@ fn main() {
     let mut prime_powers: HashMap<u64, u64> = primes.iter().map(|&prime| (prime, 0)).collect();
     let best_match = Arc::new(Mutex::new((BigUint::from(u64::MAX), prime_powers.clone())));
 
+    // Progress bar for guessing prime powers
     let bar = ProgressBar::new(1000000);
     bar.set_style(
         ProgressStyle::default_bar()
             .template("{msg} {bar:40.cyan/blue} {pos}/{len}")
             .expect("Failed to set progress bar style"),
     );
+    bar.set_message("Processing guesses");
 
     let found = Arc::new(Mutex::new(false));
     let total_iterations = 1000000;
