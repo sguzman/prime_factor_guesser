@@ -8,3 +8,7 @@ indicatif = { version = "0.17.8", features = ["rayon"] }
 log = "0.4"
 env_logger = "0.10"
 rayon = "1.7"
+num-bigint = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.0", features = ["derive"] }
