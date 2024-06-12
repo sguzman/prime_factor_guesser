@@ -2,10 +2,10 @@ use clap::Parser;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use log::{info, warn};
 use num_bigint::{BigUint, ToBigUint};
-use num_traits::identities::One;
+use num_traits::One;
 use rayon::prelude::*;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::to_string_pretty;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
 struct Args {
-    #[clap(short, long, parse(from_os_str))]
+    #[clap(short, long)]
     file: std::path::PathBuf,
 }
 
@@ -68,7 +68,7 @@ fn main() {
     info!("Number to factorize: {}", number);
 
     // Generate prime candidates up to sqrt(number)
-    let sqrt_n = number.sqrt().to_u64_digits().1[0];
+    let sqrt_n = number.sqrt().to_u64_digits().0[0];
     let primes = generate_primes_up_to(sqrt_n);
 
     info!(
@@ -123,7 +123,7 @@ fn main() {
                 log_guess(&local_prime_powers);
 
                 let mut best_match = best_match.lock().unwrap();
-                let current_distance = (&product - &number).abs();
+                let current_distance = (&product - &number).abs().to_biguint().unwrap();
                 if current_distance < best_match.0 {
                     best_match.0 = current_distance;
                     best_match.1 = local_prime_powers.clone();
@@ -141,7 +141,7 @@ fn main() {
     if *found.lock().unwrap() {
         println!(
             "Prime factors found: {}",
-            serde_json::to_string_pretty(&PrimeFactors {
+            to_string_pretty(&PrimeFactors {
                 factors: best_match.1.clone()
             })
             .unwrap()
@@ -149,7 +149,7 @@ fn main() {
     } else {
         println!(
             "Failed to find prime factors. Best match: {}",
-            serde_json::to_string_pretty(&PrimeFactors {
+            to_string_pretty(&PrimeFactors {
                 factors: best_match.1.clone()
             })
             .unwrap()
