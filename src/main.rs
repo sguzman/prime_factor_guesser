@@ -1,11 +1,12 @@
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use log::{debug, info, warn, LevelFilter};
 use rayon::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::to_string_pretty;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use clap::Parser;
 use num_bigint::{BigUint, ToBigUint};
@@ -14,22 +15,60 @@ use num_traits::One;
 #[derive(Parser, Debug)]
 struct Args {
     #[clap(short, long)]
-    file: std::path::PathBuf,
+    file: PathBuf,
+    #[clap(short, long)]
+    cache: Option<PathBuf>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct PrimeFactors {
     factors: HashMap<u64, u64>,
 }
 
-fn generate_primes_up_to(n: u64) -> Vec<u64> {
-    let mut primes = vec![2];
-    for num in 3..=n {
-        if primes.iter().all(|prime| num % prime != 0) {
-            primes.push(num);
+fn generate_primes_up_to(n: u64, cache_file: Option<&PathBuf>) -> Vec<u64> {
+    if let Some(cache_file) = cache_file {
+        if let Ok(cached_primes) = read_primes_from_cache(cache_file) {
+            return cached_primes;
         }
     }
+
+    let bar = ProgressBar::new(n);
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} {bar:40.cyan/blue} {pos}/{len} {eta}")
+            .expect("Failed to set progress bar style")
+            .progress_chars("#>-"),
+    );
+    bar.set_message("Generating primes");
+
+    let primes: Vec<u64> = (2..=n)
+        .into_par_iter()
+        .progress_with(bar.clone())
+        .filter(|num| (2..(*num as f64).sqrt() as u64 + 1).all(|i| num % i != 0))
+        .collect();
+
+    bar.finish_with_message("Prime generation completed");
+
+    if let Some(cache_file) = cache_file {
+        write_primes_to_cache(cache_file, &primes).expect("Failed to write primes to cache");
+    }
+
     primes
+}
+
+fn read_primes_from_cache(cache_file: &PathBuf) -> Result<Vec<u64>, std::io::Error> {
+    let mut file = File::open(cache_file)?;
+    let mut buffer = String::new();
+    file.read_to_string(&mut buffer)?;
+    let primes: Vec<u64> = serde_json::from_str(&buffer)?;
+    Ok(primes)
+}
+
+fn write_primes_to_cache(cache_file: &PathBuf, primes: &[u64]) -> Result<(), std::io::Error> {
+    let mut file = File::create(cache_file)?;
+    let data = serde_json::to_string(primes)?;
+    file.write_all(data.as_bytes())?;
+    Ok(())
 }
 
 fn compute_product(prime_powers: &HashMap<u64, u64>) -> BigUint {
@@ -67,7 +106,7 @@ fn main() {
 
     let sqrt_n = number.sqrt();
     let sqrt_u64 = sqrt_n.to_u64_digits()[0];
-    let primes = generate_primes_up_to(sqrt_u64);
+    let primes = generate_primes_up_to(sqrt_u64, args.cache.as_ref());
     debug!("Generated primes up to sqrt(n): {:?}", primes);
 
     info!(
