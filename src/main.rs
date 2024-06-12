@@ -1,8 +1,5 @@
-use clap::Parser;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use log::{info, warn};
-use num_bigint::{BigUint, ToBigUint};
-use num_traits::One;
 use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::to_string_pretty;
@@ -10,6 +7,9 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use clap::Parser;
+use num_bigint::{BigUint, ToBigUint};
+use num_traits::One;
 
 #[derive(Parser)]
 struct Args {
@@ -22,7 +22,6 @@ struct PrimeFactors {
     factors: HashMap<u64, u64>,
 }
 
-// Function to generate a vector of prime numbers up to sqrt(n)
 fn generate_primes_up_to(n: u64) -> Vec<u64> {
     let mut primes = vec![2];
     for num in 3..=n {
@@ -33,7 +32,6 @@ fn generate_primes_up_to(n: u64) -> Vec<u64> {
     primes
 }
 
-// Function to compute the product of the current guess
 fn compute_product(prime_powers: &HashMap<u64, u64>) -> BigUint {
     prime_powers
         .iter()
@@ -41,7 +39,6 @@ fn compute_product(prime_powers: &HashMap<u64, u64>) -> BigUint {
         .fold(BigUint::one(), |acc, x| acc * x)
 }
 
-// Function to log the current guess
 fn log_guess(prime_powers: &HashMap<u64, u64>) {
     let guess: Vec<String> = prime_powers
         .iter()
@@ -51,25 +48,20 @@ fn log_guess(prime_powers: &HashMap<u64, u64>) {
 }
 
 fn main() {
-    // Initialize the logger
     env_logger::init();
 
-    // Parse command line arguments
     let args = Args::parse();
 
-    // Read the file
     let mut file = File::open(&args.file).expect("Failed to open the file");
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .expect("Failed to read the file");
+    file.read_to_end(&mut buffer).expect("Failed to read the file");
 
-    // Interpret bytes as a large number
     let number = BigUint::from_bytes_be(&buffer);
     info!("Number to factorize: {}", number);
 
-    // Generate prime candidates up to sqrt(number)
-    let sqrt_n = number.sqrt().to_u64_digits().0[0];
-    let primes = generate_primes_up_to(sqrt_n);
+    let sqrt_n = number.sqrt();
+    let sqrt_u64 = sqrt_n.to_u64_digits()[0];
+    let primes = generate_primes_up_to(sqrt_u64);
 
     info!(
         "Generated {} prime candidates up to sqrt({})",
@@ -77,11 +69,9 @@ fn main() {
         number
     );
 
-    // Initialize the guess with all powers set to 0
     let mut prime_powers: HashMap<u64, u64> = primes.iter().map(|&prime| (prime, 0)).collect();
     let best_match = Arc::new(Mutex::new((BigUint::from(u64::MAX), prime_powers.clone())));
 
-    // Progress bar
     let bar = ProgressBar::new(1000000);
     bar.set_style(
         ProgressStyle::default_bar()
@@ -90,7 +80,7 @@ fn main() {
     );
 
     let found = Arc::new(Mutex::new(false));
-    let total_iterations = 1000000; // Example number of iterations to try
+    let total_iterations = 1000000;
 
     (0..total_iterations)
         .into_par_iter()
@@ -113,7 +103,6 @@ fn main() {
                 }
                 info!("Found prime factors: {:?}", local_prime_powers);
             } else {
-                // Adjust the powers for the next guess
                 for prime in &primes {
                     if let Some(power) = local_prime_powers.get_mut(prime) {
                         *power += 1;
@@ -123,7 +112,11 @@ fn main() {
                 log_guess(&local_prime_powers);
 
                 let mut best_match = best_match.lock().unwrap();
-                let current_distance = (&product - &number).abs().to_biguint().unwrap();
+                let current_distance = if &product > &number {
+                    &product - &number
+                } else {
+                    &number - &product
+                };
                 if current_distance < best_match.0 {
                     best_match.0 = current_distance;
                     best_match.1 = local_prime_powers.clone();
