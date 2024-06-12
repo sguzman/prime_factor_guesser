@@ -1,8 +1,5 @@
-use clap::Parser;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use log::{debug, info, warn, LevelFilter};
-use num_bigint::{BigUint, ToBigUint};
-use num_traits::One;
 use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::to_string_pretty;
@@ -10,8 +7,11 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use clap::Parser;
+use num_bigint::{BigUint, ToBigUint};
+use num_traits::One;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 struct Args {
     #[clap(short, long)]
     file: std::path::PathBuf,
@@ -44,7 +44,7 @@ fn log_guess(prime_powers: &HashMap<u64, u64>) {
         .iter()
         .map(|(prime, power)| format!("{}^{}", prime, power))
         .collect();
-    info!("Current guess: {}", guess.join(" * "));
+    debug!("Current guess: {}", guess.join(" * "));
 }
 
 fn main() {
@@ -52,11 +52,14 @@ fn main() {
     init_logging();
 
     let args = Args::parse();
+    debug!("Parsed arguments: {:?}", args);
 
     let mut file = File::open(&args.file).expect("Failed to open the file");
+    debug!("Opened file: {:?}", args.file);
+
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .expect("Failed to read the file");
+    file.read_to_end(&mut buffer).expect("Failed to read the file");
+    debug!("Read file content. Buffer length: {}", buffer.len());
 
     let number = BigUint::from_bytes_be(&buffer);
     info!("Number to factorize: {}", number);
@@ -65,6 +68,7 @@ fn main() {
     let sqrt_n = number.sqrt();
     let sqrt_u64 = sqrt_n.to_u64_digits()[0];
     let primes = generate_primes_up_to(sqrt_u64);
+    debug!("Generated primes up to sqrt(n): {:?}", primes);
 
     info!(
         "Generated {} prime candidates up to sqrt({})",
