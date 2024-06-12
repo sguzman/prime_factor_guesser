@@ -1,0 +1,10 @@
+[package]
+name = "prime_factor_guesser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+indicatif = { version = "0.17.8", features = ["rayon"] }
+log = "0.4"
+env_logger = "0.10"
+rayon = "1.7"
